@@ -1,0 +1,34 @@
+{
+  "name": "logl",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "LOGL - AI-driven geopolitical world simulation on a real world map",
+  "scripts": {
+    "build:world": "node scripts/build-world.mjs",
+    "build:client": "node scripts/build-client.mjs",
+    "build": "npm run build:world && npm run build:client",
+    "dev": "node scripts/build-client.mjs --watch & node --watch src/server.js",
+    "start": "node src/server.js",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.68.0",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "openai": "^6.10.0"
+  },
+  "devDependencies": {
+    "all-the-cities": "^3.1.0",
+    "d3-delaunay": "^6.0.4",
+    "d3-geo": "^3.1.1",
+    "esbuild": "^0.25.10",
+    "polygon-clipping": "^0.15.7",
+    "topojson-client": "^3.1.0",
+    "world-atlas": "^2.0.2",
+    "world-countries": "^5.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
