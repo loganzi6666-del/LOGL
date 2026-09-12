@@ -14,22 +14,22 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",
-    "dotenv": "^17.2.3",
-    "express": "^5.1.0",
-    "openai": "^7.15.0"
-  },
-  "devDependencies": {
     "all-the-cities": "^3.1.0",
     "d3-delaunay": "^6.0.4",
     "d3-geo": "^3.1.1",
     "d3-selection": "^3.0.0",
     "d3-zoom": "^3.0.0",
+    "dotenv": "^17.2.3",
     "esbuild": "^0.25.10",
-    "playwright": "^1.63.0",
+    "express": "^5.1.0",
+    "openai": "^7.15.0",
     "polygon-clipping": "^0.15.7",
     "topojson-client": "^3.1.0",
     "world-atlas": "^2.0.2",
     "world-countries": "^5.1.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.63.0"
   },
   "engines": {
     "node": ">=20"

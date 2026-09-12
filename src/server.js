@@ -17,20 +17,26 @@ import { loadWorld } from './game/world.js';
 import { Session } from './game/session.js';
 
 const WORLD_PATH = path.join(ROOT, 'data', 'world.json');
+const BUNDLE_PATH = path.join(ROOT, 'public', 'dist', 'app.js');
 
-/** The map is generated, not committed. Build it on first run so setup is one step. */
-function ensureWorldData() {
-  if (fs.existsSync(WORLD_PATH)) return;
-  console.log('지도 데이터가 없습니다. 생성 중입니다… (약 10초)');
-  const result = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'build-world.mjs')], {
+/**
+ * Neither the map nor the browser bundle is committed — both are generated. So
+ * that a fresh checkout needs nothing but `npm install && npm start`, build
+ * whichever is missing before serving anything.
+ */
+function ensureBuilt(label, outputPath, script, hint) {
+  if (fs.existsSync(outputPath)) return;
+  console.log(`${label}를 생성하는 중입니다…`);
+  const result = spawnSync(process.execPath, [path.join(ROOT, 'scripts', script)], {
     stdio: 'inherit',
   });
-  if (result.status !== 0) {
-    throw new Error('지도 생성에 실패했습니다. "npm run build:world"를 직접 실행해 보세요.');
+  if (result.status !== 0 || !fs.existsSync(outputPath)) {
+    throw new Error(`${label} 생성에 실패했습니다. "${hint}"를 직접 실행해 보세요.`);
   }
 }
 
-ensureWorldData();
+ensureBuilt('지도 데이터 (약 10초 걸립니다)', WORLD_PATH, 'build-world.mjs', 'npm run build:world');
+ensureBuilt('화면 파일', BUNDLE_PATH, 'build-client.mjs', 'npm run build:client');
 
 const world = loadWorld();
 const app = express();
