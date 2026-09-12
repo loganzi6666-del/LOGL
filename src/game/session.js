@@ -17,6 +17,7 @@ import { newGame, recomputeAll, SAVE_VERSION } from './state.js';
 import { resolveTurn, formatDate } from './engine.js';
 import { validateOrders } from './orders.js';
 import { interpretCommand, retryRejected } from '../ai/arbiter.js';
+import { parseCommand } from '../ai/localCommand.js';
 import { planAiTurn } from '../ai/nation.js';
 import { localSummary, narrateTurn } from '../ai/narrator.js';
 import { heuristicOrders } from '../ai/heuristic.js';
@@ -95,13 +96,23 @@ export class Session {
    * arbiter produced, what it refused and why, and its reply — so the player can
    * see what is about to happen before the month runs.
    */
-  async interpret(instruction) {
+  async interpret(instruction, { selectedProvince = null } = {}) {
+    // No key, no problem: the local parser understands the common Korean orders
+    // instantly and for nothing. It is also the safety net when a paid call fails.
     if (!hasCredentials()) {
-      throw new Error(
-        'API 키가 설정되지 않아 자연어 명령을 해석할 수 없습니다. .env에 ANTHROPIC_API_KEY 또는 OPENAI_API_KEY를 넣거나, UI의 직접 명령 기능을 사용하세요.',
-      );
+      return parseCommand(this.state, this.world, instruction, { selectedProvince });
     }
-    let result = await interpretCommand(this.state, this.world, instruction);
+
+    let result;
+    try {
+      result = await interpretCommand(this.state, this.world, instruction);
+    } catch (error) {
+      const local = parseCommand(this.state, this.world, instruction, { selectedProvince });
+      return {
+        ...local,
+        reply: `AI 호출에 실패해 내장 해석기로 처리했습니다 (${error.message}).\n${local.reply}`,
+      };
+    }
 
     // One corrective pass: the rejection reasons are specific enough to act on.
     if (result.rejected.length && !result.isQuestion) {

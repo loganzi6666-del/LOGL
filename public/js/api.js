@@ -22,7 +22,8 @@ export const api = {
   playable: () => request('/api/playable'),
   state: () => request('/api/state'),
   newGame: (body) => request('/api/game/new', { method: 'POST', body }),
-  interpret: (instruction) => request('/api/interpret', { method: 'POST', body: { instruction } }),
+  interpret: (instruction, selectedProvince = null) =>
+    request('/api/interpret', { method: 'POST', body: { instruction, selectedProvince } }),
   turn: (body) => request('/api/turn', { method: 'POST', body }),
   saves: () => request('/api/saves'),
   save: (name) => request('/api/save', { method: 'POST', body: { name } }),

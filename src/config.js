@@ -27,6 +27,10 @@ export const config = {
   openai: {
     apiKey: process.env.OPENAI_API_KEY ?? null,
     model: process.env.OPENAI_MODEL ?? 'gpt-4.1',
+    // Anything speaking the OpenAI protocol works here: Ollama on your own
+    // machine (http://localhost:11434/v1), or another provider's compatible
+    // endpoint. That is what makes a full language model free.
+    baseUrl: process.env.OPENAI_BASE_URL ?? null,
   },
 
   /** How many AI nations get a full language-model turn. The rest use rules. */
@@ -36,9 +40,15 @@ export const config = {
 };
 
 export function hasCredentials() {
-  return config.provider === 'openai'
-    ? Boolean(config.openai.apiKey)
-    : Boolean(config.anthropic.apiKey);
+  if (config.provider !== 'openai') return Boolean(config.anthropic.apiKey);
+  // A local server needs no real key, so a base URL is credential enough.
+  return Boolean(config.openai.apiKey || config.openai.baseUrl);
+}
+
+/** True when the model runs on the player's own machine, and so costs nothing. */
+export function isLocalModel() {
+  const url = config.openai.baseUrl ?? '';
+  return /localhost|127\.0\.0\.1|0\.0\.0\.0/.test(url);
 }
 
 export function ensureSavesDir() {

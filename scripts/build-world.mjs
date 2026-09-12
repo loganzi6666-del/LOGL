@@ -419,6 +419,14 @@ async function main() {
   const { byNumeric, byAlpha2 } = indexCountryMeta();
   const citiesByCountry = indexCities();
 
+  // Korean names for the places a Korean-speaking player is likely to type.
+  // Anything missing keeps its romanised name.
+  const placeNamePath = path.join(DATA_DIR, 'place-names-ko.json');
+  const placeNamesKo = fs.existsSync(placeNamePath)
+    ? JSON.parse(fs.readFileSync(placeNamePath, 'utf8'))
+    : {};
+  delete placeNamesKo._readme;
+
   const seedPath = path.join(DATA_DIR, 'nations-seed.json');
   const nationSeed = fs.existsSync(seedPath)
     ? JSON.parse(fs.readFileSync(seedPath, 'utf8'))
@@ -498,6 +506,7 @@ async function main() {
       provinces.push({
         id: `${iso2}-${String(offset + 1).padStart(2, '0')}`,
         name: province.name,
+        nameKo: placeNamesKo[province.name] ?? null,
         owner: seedRow.sov ?? iso2,
         coreOwner: iso2,
         adminCode: province.adminCode,
@@ -644,6 +653,8 @@ async function main() {
   log(`  nations:   ${nations.size}`);
   log(`  provinces: ${provinces.length}  (coastal ${coastalCount}, island/isolated ${isolated})`);
   log(`  land borders matched against ISO data: ${borderHits} hit / ${borderMisses} missed`);
+  const named = provinces.filter((p) => p.nameKo).length;
+  log(`  한국어 지명: ${named}/${provinces.length}개 주 (나머지는 영문 그대로 표시됩니다)`);
   const missingSeed = [...nations.values()].filter((n) => !n.hasSeedData).map((n) => n.iso2);
   if (missingSeed.length) log(`  ! no seed stats for: ${missingSeed.join(', ')}`);
 }

@@ -66,18 +66,22 @@ let playable = [];
 let chosen = null;
 
 async function initStartScreen() {
-  const { nations, aiEnabled, provider } = await api.playable();
+  const { nations, aiEnabled, provider, free } = await api.playable();
   playable = nations;
 
   const status = $('ai-status');
   const dot = document.createElement('span');
   dot.className = 'dot';
-  dot.style.background = aiEnabled ? '#0ca30c' : '#fab219';
+  // Green whenever play costs nothing, which is the state most players are in.
+  dot.style.background = free || aiEnabled ? '#0ca30c' : '#fab219';
   status.replaceChildren(dot);
   status.append(
-    aiEnabled
-      ? `AI 연결됨 — ${provider === 'openai' ? 'ChatGPT' : 'Claude'}. 자연어로 지시할 수 있습니다.`
-      : 'API 키가 없습니다. 규칙 기반으로 플레이할 수 있고, .env에 키를 넣으면 자연어 명령과 AI 국가가 켜집니다.',
+    !aiEnabled
+      ? '무료 모드 — 한국어 명령을 그대로 알아듣습니다. 결제도 설정도 필요 없습니다. ' +
+        'API 키를 넣으면 각국이 스스로 판단하는 AI 외교까지 켜집니다.'
+      : free
+        ? `내 컴퓨터의 모델에 연결됨 — 요금이 들지 않습니다.`
+        : `AI 연결됨 — ${provider === 'openai' ? 'ChatGPT' : 'Claude'}. 각국이 스스로 판단합니다.`,
   );
 
   renderNationList('');
@@ -397,7 +401,7 @@ async function interpret() {
   }
   setBusy(true, '참모본부가 지시를 검토 중…');
   try {
-    const result = await api.interpret(instruction);
+    const result = await api.interpret(instruction, app.selected);
     app.lastInstruction = instruction;
     if (result.isQuestion) {
       renderPending({ understanding: result.understanding, reply: result.reply });
@@ -407,7 +411,7 @@ async function interpret() {
       renderPending(result);
       $('command-hint').textContent = result.orders.length
         ? `${result.orders.length}개 명령이 준비되었습니다. "턴 종료"로 실행하세요.`
-        : '실행 가능한 명령을 만들지 못했습니다.';
+        : '실행 가능한 명령을 만들지 못했습니다. 아래 설명을 확인하세요.';
     }
   } catch (error) {
     toast(error.message, { error: true });

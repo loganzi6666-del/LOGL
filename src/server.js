@@ -12,7 +12,7 @@ import { spawnSync } from 'node:child_process';
 import express from 'express';
 import { gzipSync } from 'node:zlib';
 
-import { config, hasCredentials, ROOT } from './config.js';
+import { config, hasCredentials, isLocalModel, ROOT } from './config.js';
 import { loadWorld } from './game/world.js';
 import { Session } from './game/session.js';
 
@@ -26,16 +26,16 @@ const BUNDLE_PATH = path.join(ROOT, 'public', 'dist', 'app.js');
  */
 function ensureBuilt(label, outputPath, script, hint) {
   if (fs.existsSync(outputPath)) return;
-  console.log(`${label}를 생성하는 중입니다…`);
+  console.log(`처음 실행이라 ${label} 준비 중입니다. 잠시만 기다려 주세요…`);
   const result = spawnSync(process.execPath, [path.join(ROOT, 'scripts', script)], {
     stdio: 'inherit',
   });
   if (result.status !== 0 || !fs.existsSync(outputPath)) {
-    throw new Error(`${label} 생성에 실패했습니다. "${hint}"를 직접 실행해 보세요.`);
+    throw new Error(`${label} 준비에 실패했습니다. 터미널에서 "${hint}"를 직접 실행해 보세요.`);
   }
 }
 
-ensureBuilt('지도 데이터 (약 10초 걸립니다)', WORLD_PATH, 'build-world.mjs', 'npm run build:world');
+ensureBuilt('세계 지도 (약 10초)', WORLD_PATH, 'build-world.mjs', 'npm run build:world');
 ensureBuilt('화면 파일', BUNDLE_PATH, 'build-client.mjs', 'npm run build:client');
 
 const world = loadWorld();
@@ -142,7 +142,13 @@ app.get('/api/playable', (req, res) => {
     });
   }
   rows.sort((a, b) => b.gdp - a.gdp);
-  res.json({ nations: rows, aiEnabled: hasCredentials(), provider: config.provider });
+  res.json({
+    nations: rows,
+    aiEnabled: hasCredentials(),
+    provider: config.provider,
+    // "free" covers both no key at all (built-in parser) and a local model.
+    free: !hasCredentials() || isLocalModel(),
+  });
 });
 
 app.post('/api/game/new', (req, res) => {
@@ -171,7 +177,11 @@ app.post('/api/interpret', async (req, res) => {
   const instruction = String(req.body?.instruction ?? '').trim();
   if (!instruction) return fail(res, new Error('지시 내용이 비어 있습니다.'));
   try {
-    res.json(await session.interpret(instruction));
+    res.json(
+      await session.interpret(instruction, {
+        selectedProvince: req.body?.selectedProvince ? String(req.body.selectedProvince) : null,
+      }),
+    );
   } catch (error) {
     fail(res, error, 502);
   }
@@ -242,10 +252,14 @@ app.listen(config.port, () => {
   console.log(`  http://localhost:${config.port}`);
   console.log('');
   console.log(`  지도: ${world.provinceList.length}개 주 / ${world.nations.size}개 국가`);
-  console.log(
-    keyed
-      ? `  AI: ${config.provider} (${config.provider === 'openai' ? config.openai.model : config.anthropic.model}), 한 턴에 ${config.thinkingNations}개국이 직접 사고`
-      : `  AI: API 키 없음 — 규칙 기반으로만 동작합니다. .env에 키를 넣으면 자연어 명령이 켜집니다.`,
-  );
+  if (!keyed) {
+    console.log('  모드: 무료 — 한국어 명령 해석기와 규칙 기반 AI로 동작합니다. 설정할 것 없습니다.');
+  } else {
+    const model = config.provider === 'openai' ? config.openai.model : config.anthropic.model;
+    console.log(
+      `  모드: ${isLocalModel() ? '내 컴퓨터의 모델 (무료)' : config.provider} · ${model} · ` +
+        `한 턴에 ${config.thinkingNations}개국이 직접 사고`,
+    );
+  }
   console.log('');
 });

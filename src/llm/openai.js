@@ -10,7 +10,11 @@ import OpenAI from 'openai';
 import { config } from '../config.js';
 
 export function createOpenAiProvider() {
-  const client = new OpenAI({ apiKey: config.openai.apiKey });
+  const client = new OpenAI({
+    // Local servers ignore the key but the SDK insists on one being present.
+    apiKey: config.openai.apiKey ?? 'local',
+    ...(config.openai.baseUrl ? { baseURL: config.openai.baseUrl } : {}),
+  });
 
   // Strict mode forbids a few JSON Schema constructs that Claude accepts.
   const sanitise = (schema) => JSON.parse(JSON.stringify(schema));

@@ -71,14 +71,51 @@ await step('inspect a province', async () => {
   await page.waitForTimeout(400);
 });
 
-await step('queue an order and resolve three turns', async () => {
+await step('type a Korean order and have it understood for free', async () => {
+  await page.fill('#command', '북한에 선전포고하고 5개 사단을 증강하라');
+  await page.click('#interpret-btn');
+  await page.waitForFunction(() => document.getElementById('map-busy').hidden, null, { timeout: 60000 });
+  await page.waitForTimeout(300);
+
+  const pending = await page.textContent('#pending');
+  if (!/선전포고/.test(pending ?? '')) {
+    throw new Error(`the parser did not produce a declaration: ${pending}`);
+  }
+  if (!/사단 편성/.test(pending ?? '')) {
+    throw new Error(`the parser did not produce a recruitment: ${pending}`);
+  }
+
+  await page.click('#turn-btn');
+  await page.waitForFunction(() => document.getElementById('map-busy').hidden, null, { timeout: 60000 });
+  await page.waitForTimeout(400);
+
+  const atWar = await page.evaluate(() => window.__logl.state.player.atWarWith);
+  if (!atWar.includes('KP')) throw new Error(`expected war with KP, got ${atWar.join(',')}`);
+});
+await page.screenshot({ path: path.join(outDir, '2b-korean-command.png') });
+
+await step('a question is answered without spending a turn', async () => {
+  const before = await page.evaluate(() => window.__logl.state.meta.turn);
+  await page.fill('#command', '북한 군사력이 어때?');
+  await page.click('#interpret-btn');
+  await page.waitForFunction(() => document.getElementById('map-busy').hidden, null, { timeout: 60000 });
+  await page.waitForTimeout(300);
+
+  const reply = await page.textContent('#pending');
+  if (!/사단|병력/.test(reply ?? '')) throw new Error(`no answer given: ${reply}`);
+  const after = await page.evaluate(() => window.__logl.state.meta.turn);
+  if (after !== before) throw new Error('a question should not advance the turn');
+});
+
+await step('resolve three more turns', async () => {
+  const before = await page.evaluate(() => window.__logl.state.meta.turn);
   for (let turn = 0; turn < 3; turn += 1) {
     await page.click('#turn-btn');
     await page.waitForFunction(() => document.getElementById('map-busy').hidden, null, { timeout: 60000 });
     await page.waitForTimeout(300);
   }
-  const label = await page.textContent('#date-label');
-  if (!/4턴/.test(label)) throw new Error(`expected to be on turn 4, got "${label}"`);
+  const after = await page.evaluate(() => window.__logl.state.meta.turn);
+  if (after !== before + 3) throw new Error(`expected turn ${before + 3}, got ${after}`);
 });
 await page.screenshot({ path: path.join(outDir, '3-after-turns.png') });
 

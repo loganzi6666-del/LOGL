@@ -327,14 +327,47 @@ export function validateOrder(state, world, iso2, raw) {
   }
 }
 
-/** Validate a batch, keeping the good and reporting the rest. */
+/**
+ * Validate a batch in the order it was written.
+ *
+ * Orders within one turn are not independent: the engine settles diplomacy
+ * before it fights, so "declare war on the North, then take Kaesŏng" is a legal
+ * pair even though the attack is illegal at the moment the batch arrives. A
+ * declaration earlier in the batch is therefore in force for everything after
+ * it — otherwise the most natural thing a player can say would always be half
+ * refused.
+ */
 export function validateOrders(state, world, iso2, rawOrders) {
   const accepted = [];
   const rejected = [];
-  for (const raw of rawOrders ?? []) {
-    const result = validateOrder(state, world, iso2, raw);
-    if (result.ok) accepted.push(result.order);
-    else rejected.push({ order: raw, reason: result.reason });
+  const provisional = [];
+
+  const openWar = (target) => {
+    const us = state.nations[iso2];
+    const them = state.nations[target];
+    if (!us || !them || us.atWarWith.includes(target)) return;
+    us.atWarWith.push(target);
+    them.atWarWith.push(iso2);
+    provisional.push(target);
+  };
+
+  try {
+    for (const raw of rawOrders ?? []) {
+      const result = validateOrder(state, world, iso2, raw);
+      if (result.ok) {
+        accepted.push(result.order);
+        if (result.order.type === 'DECLARE_WAR') openWar(result.order.target);
+      } else {
+        rejected.push({ order: raw, reason: result.reason });
+      }
+    }
+  } finally {
+    // The real declaration happens in the engine, not here.
+    for (const target of provisional) {
+      state.nations[iso2].atWarWith = state.nations[iso2].atWarWith.filter((x) => x !== target);
+      state.nations[target].atWarWith = state.nations[target].atWarWith.filter((x) => x !== iso2);
+    }
   }
+
   return { accepted, rejected };
 }
