@@ -201,7 +201,10 @@ export function tickHomeFront(state, world, nation) {
       nation.stability - POLITICS.OCCUPIED_HOME_PENALTY * Math.min(4, nation.occupiedByEnemy),
     );
   } else if (!atWar) {
-    nation.stability = Math.min(100, nation.stability + 0.8);
+    // Recovery runs towards the nation's own natural level, not towards calm.
+    const natural = nation.baseStability ?? 60;
+    const gap = natural - nation.stability;
+    nation.stability += Math.sign(gap) * Math.min(0.8, Math.abs(gap));
   }
 
   nation.stability = Math.max(

@@ -13,10 +13,10 @@
     "test": "node --test test/**/*.test.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.68.0",
+    "@anthropic-ai/sdk": "^0.125.0",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
-    "openai": "^6.10.0"
+    "openai": "^7.15.0"
   },
   "devDependencies": {
     "all-the-cities": "^3.1.0",

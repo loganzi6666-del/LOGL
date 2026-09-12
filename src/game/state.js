@@ -63,6 +63,26 @@ export const GREAT_POWERS = [
   'PK', 'ID', 'MX', 'EG', 'ZA', 'NG', 'ES', 'VN', 'TW', 'AR',
 ];
 
+/**
+ * The level a nation's stability settles at in peacetime, from how it is governed
+ * and how rich it is. Without this every state drifts to perfect calm and the
+ * world freezes: fragile states have to stay fragile for the map to stay alive.
+ */
+export function naturalStability(government, gdpPerCapita) {
+  const wealth = Math.min(1, Math.log10(Math.max(300, gdpPerCapita)) / 5);
+  let base = 32 + wealth * 34;
+  const gov = government ?? '';
+  if (gov.includes('과도') || gov.includes('분열') || gov.includes('내전')) base -= 28;
+  else if (gov.includes('군사정권')) base -= 18;
+  else if (gov.includes('신정')) base -= 10;
+  else if (gov.includes('권위주의')) base -= 8;
+  else if (gov.includes('일당제')) base -= 4;
+  else if (gov.includes('절대군주')) base -= 2;
+  if (gov.includes('민주') || gov.includes('입헌군주')) base += 6;
+  if (gov.includes('분쟁 지역')) base -= 30;
+  return Math.max(8, Math.min(88, Math.round(base)));
+}
+
 export const relationKey = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
 
 export function getRelation(state, a, b) {
@@ -328,7 +348,8 @@ export function newGame({ playerNation = 'KR', seed = null, startYear = 2025 } =
         Math.min(10, Math.round(1 + 9 * ((Math.log10(Math.max(300, perCapita)) - 2.7) / 2.3))),
       ),
 
-      stability: 60,
+      baseStability: naturalStability(meta.government, perCapita),
+      stability: naturalStability(meta.government, perCapita),
       warSupport: 55,
       warExhaustion: 0,
 
