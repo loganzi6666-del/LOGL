@@ -333,8 +333,10 @@ export function newGame({ playerNation = 'KR', seed = null, startYear = 2025 } =
       gdpPerCapita: Math.round(perCapita),
       treasury: Math.max(2, (gdp * defenceShare) / 12) * 4, // four months of budget banked
       defenceShare,
-      income: 0,
-      expenses: 0,
+      // Seeded so the opening screen shows a real budget rather than zeroes;
+      // settleBudget recomputes both every month from there.
+      income: Number(((gdp * defenceShare) / 12).toFixed(3)),
+      expenses: Number((divisions * upkeep).toFixed(3)),
 
       divisions,
       reserveDivisions: 0,

@@ -107,6 +107,8 @@ export function declareWar(state, world, aggressor, defender, { casusBelli = nul
     battlesLost: 0,
   };
   state.wars.push(war);
+  // Counted on meta so the tally survives log trimming.
+  state.meta.warsDeclared = (state.meta.warsDeclared ?? 0) + 1;
 
   linkWar(state, aggressor, defender);
 

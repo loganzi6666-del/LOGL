@@ -42,6 +42,13 @@ import {
   recomputeNation,
 } from './state.js';
 
+/**
+ * Bookkeeping every nation does every month. It belongs in the turn's report,
+ * but not in the permanent history — two hundred nations' routine spending
+ * pushes the wars and treaties out of a bounded log within a few years.
+ */
+const ROUTINE_KINDS = new Set(['economy', 'military', 'movement', 'attrition', 'rejected']);
+
 const MONTH_NAMES = [
   '1월', '2월', '3월', '4월', '5월', '6월',
   '7월', '8월', '9월', '10월', '11월', '12월',
@@ -614,10 +621,18 @@ export function resolveTurn(state, world, rawOrders) {
     })),
   };
 
+  const player = state.meta.playerNation;
   state.log.push(
-    ...events.map((event) => ({ turn: report.turn, ...event })),
+    ...events
+      .filter(
+        (event) =>
+          event.nation === player ||
+          event.target === player ||
+          !ROUTINE_KINDS.has(event.kind),
+      )
+      .map((event) => ({ turn: report.turn, ...event })),
   );
-  if (state.log.length > 800) state.log.splice(0, state.log.length - 800);
+  if (state.log.length > 1500) state.log.splice(0, state.log.length - 1500);
   state.lastReport = report;
 
   return report;

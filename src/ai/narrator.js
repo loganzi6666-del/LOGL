@@ -26,6 +26,19 @@ const INTERESTING = new Set([
 ]);
 
 /**
+ * Two hundred nations each investing their surplus every month produces a
+ * hundred near-identical lines that bury the news. Routine housekeeping is only
+ * worth reporting when it is ours.
+ */
+const ROUTINE = new Set(['economy', 'military', 'movement', 'attrition']);
+
+export function isNewsworthy(event, player) {
+  if (event.kind === 'rejected') return false;
+  if (event.nation === player || event.target === player) return true;
+  return !ROUTINE.has(event.kind);
+}
+
+/**
  * @param {object} report the return value of `resolveTurn`
  * @returns {Promise<{headline, report, advisories}>}
  */
@@ -34,7 +47,7 @@ export async function narrateTurn(state, world, report, { playerDecision = null 
 
   // Rank events so the important ones survive the cut.
   const scored = report.events
-    .filter((event) => event.kind !== 'rejected')
+    .filter((event) => isNewsworthy(event, player))
     .map((event) => {
       let weight = INTERESTING.has(event.kind) ? 10 : 1;
       if (event.nation === player || event.target === player) weight += 20;
@@ -82,9 +95,7 @@ export async function narrateTurn(state, world, report, { playerDecision = null 
  */
 export function localSummary(state, world, report) {
   const player = state.meta.playerNation;
-  const notable = report.events.filter(
-    (event) => event.kind !== 'rejected' && (INTERESTING.has(event.kind) || event.nation === player),
-  );
+  const notable = report.events.filter((event) => isNewsworthy(event, player));
   const captures = report.mapChanges.filter((c) => !c.annexed).length;
   const annexations = report.mapChanges.filter((c) => c.annexed).length;
 

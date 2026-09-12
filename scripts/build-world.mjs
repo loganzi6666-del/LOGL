@@ -38,7 +38,9 @@ import {
   pointInMultiPolygon,
   polygonAreaKm2,
   quantize,
+  rewind,
   rewrapLon,
+  splitAtAntimeridian,
   toMultiPolygon,
   unwrapLon,
 } from './lib/geometry.mjs';
@@ -162,7 +164,41 @@ function buildSeeds(cities, countryMulti, budget) {
     region.population += city.population;
   }
 
-  const ranked = [...regions.values()].sort((a, b) => b.population - a.population).slice(0, budget);
+  // Ranking purely by population leaves the emptiest ground — Siberia, the
+  // Sahara, the Australian interior — swallowed by a handful of enormous cells,
+  // because the regions out there have few people. So most slots go to the
+  // biggest regions, and the rest to whichever remaining region lies furthest
+  // from everything already chosen. That keeps the cities where they belong and
+  // still covers the empty quarters.
+  const byPopulation = [...regions.values()].sort((a, b) => b.population - a.population);
+  const populated = byPopulation.slice(0, Math.max(1, Math.ceil(budget * 0.7)));
+  const ranked = [...populated];
+
+  const anchorOf = (region) => {
+    const biggest = region.cities[0];
+    return [biggest.lon, biggest.lat];
+  };
+  const remaining = byPopulation.slice(populated.length);
+
+  while (ranked.length < budget && remaining.length) {
+    let bestIndex = 0;
+    let bestDistance = -1;
+    for (let i = 0; i < remaining.length; i += 1) {
+      const [lon, lat] = anchorOf(remaining[i]);
+      let nearest = Infinity;
+      for (const chosen of ranked) {
+        const [cl, ca] = anchorOf(chosen);
+        // Planar is fine here: we only need a ranking, not a true distance.
+        const d = ((lon - cl) * Math.cos((lat * Math.PI) / 180)) ** 2 + (lat - ca) ** 2;
+        if (d < nearest) nearest = d;
+      }
+      if (nearest > bestDistance) {
+        bestDistance = nearest;
+        bestIndex = i;
+      }
+    }
+    ranked.push(remaining.splice(bestIndex, 1)[0]);
+  }
 
   const seeds = [];
   for (const region of ranked) {
@@ -300,14 +336,19 @@ function carveCountry(feature, meta, cities, seedPopulation) {
   }
 
   return provinces.map((province, index) => {
-    const finalMulti = mapMultiPolygon(province.multi, ([lon, lat]) => [unshift(lon), lat]);
+    // For a country carved in unwrapped space, cut at 180° rather than simply
+    // mapping longitudes back — otherwise a province straddling the antimeridian
+    // becomes a band stretching right across the map.
+    const finalMulti = unwrap
+      ? splitAtAntimeridian(province.multi, polygonClipping.intersection)
+      : province.multi;
     const bucket = buckets[index];
     const biggestCity = bucket.cities.sort((a, b) => b.population - a.population)[0] ?? null;
     const rawCentre = centroidOf(province.multi);
     return {
       name: biggestCity?.name ?? province.seed.name ?? meta.name,
       adminCode: province.seed.adminCode,
-      multi: quantize(finalMulti, 4),
+      multi: rewind(quantize(finalMulti, 4)),
       areaKm2: polygonAreaKm2(finalMulti),
       urbanPopulation: bucket.population,
       capitalScore: capitalMatch(bucket.cities, capitalName),
@@ -502,6 +543,55 @@ async function main() {
 
     done += 1;
     if (done % 40 === 0) log(`    …${done}/${grouped.size}`);
+  }
+
+  // No single ring may span more than half the globe; one that does has been
+  // torn across the antimeridian. A province legitimately split into pieces at
+  // +180 and -180 is fine, so this is checked per ring, not per province.
+  const torn = provinces.filter((province) =>
+    province.geometry.some((polygon) =>
+      polygon.some((ring) => {
+        let min = Infinity;
+        let max = -Infinity;
+        for (const [lon] of ring) {
+          if (lon < min) min = lon;
+          if (lon > max) max = lon;
+        }
+        return max - min > 180;
+      }),
+    ),
+  );
+  if (torn.length) {
+    throw new Error(
+      `날짜변경선을 넘어 찢어진 주가 있습니다: ${torn.map((p) => p.id).join(', ')}`,
+    );
+  }
+
+  // Final guard: project every province the way the client does and make sure
+  // none of them covers the whole globe. A mis-wound ring or a torn polygon
+  // shows up here as a shape the size of the map.
+  {
+    const { geoNaturalEarth1, geoPath } = await import('d3-geo');
+    const projection = geoNaturalEarth1();
+    const toPath = geoPath(projection);
+    const [[wx0, wy0], [wx1, wy1]] = toPath.bounds({ type: 'Sphere' });
+    const worldWidth = wx1 - wx0;
+    const worldHeight = wy1 - wy0;
+
+    const oversized = provinces.filter((province) => {
+      const [[x0, y0], [x1, y1]] = toPath.bounds({
+        type: 'Feature',
+        geometry: { type: 'MultiPolygon', coordinates: province.geometry },
+      });
+      return x1 - x0 > worldWidth * 0.9 && y1 - y0 > worldHeight * 0.9;
+    });
+    if (oversized.length) {
+      throw new Error(
+        `투영 시 지도 전체를 덮는 주가 있습니다 (링 감김 방향 오류): ${oversized
+          .map((p) => p.id)
+          .join(', ')}`,
+      );
+    }
   }
 
   log(`  ${provinces.length} provinces carved. Computing adjacency…`);

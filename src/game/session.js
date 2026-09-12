@@ -261,6 +261,8 @@ export class Session {
     const nation = this.player;
     return {
       ...nation,
+      name: nation.nameKo,
+      nameEn: nation.name,
       dateLabel: formatDate(this.state),
       upkeep: Number((nation.divisions * nation.upkeepPerDivision).toFixed(2)),
       recruitCost: Number((nation.upkeepPerDivision * 30).toFixed(3)),

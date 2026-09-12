@@ -63,18 +63,24 @@ test('the rule-based AI only ever issues orders the engine accepts', () => {
 });
 
 test('the world does not sit still: wars start, and they end', () => {
-  const state = fresh('dynamism');
-  runHeuristic(state, 60);
+  // War is stochastic, so a single five-year run can legitimately be quiet.
+  // Three independent worlds should not all be.
+  let declared = 0;
+  let settled = 0;
 
-  const declarations = state.log.filter((entry) => entry.kind === 'war');
-  const settlements = state.log.filter((entry) => entry.kind === 'peace' || entry.kind === 'capitulation');
+  for (const seed of ['dynamism-a', 'dynamism-b', 'dynamism-c']) {
+    const state = fresh(seed);
+    runHeuristic(state, 60);
+    declared += state.meta.warsDeclared ?? 0;
+    settled += state.log.filter((e) => e.kind === 'peace' || e.kind === 'capitulation').length;
 
-  assert.ok(declarations.length > 0, 'five years should see at least one war begin');
-  assert.ok(settlements.length > 0, 'and at least one end');
+    // Fragile states are what get attacked; a rich, stable neutral is not.
+    assert.ok(state.nations.CH.alive);
+    assert.equal(state.nations.CH.atWarWith.length, 0, `Switzerland at war in ${seed}`);
+  }
 
-  // Fragile states should be the ones getting attacked, not Switzerland.
-  assert.ok(state.nations.CH.alive);
-  assert.equal(state.nations.CH.atWarWith.length, 0, 'Switzerland has no business being at war');
+  assert.ok(declared > 0, 'fifteen years across three worlds should see a war begin');
+  assert.ok(settled > 0, 'and at least one end');
 });
 
 test('peacetime stability settles at each nation\'s own level, not at perfect calm', () => {

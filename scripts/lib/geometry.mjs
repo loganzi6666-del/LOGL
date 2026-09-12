@@ -217,3 +217,74 @@ export function* densifiedBoundary(multiPolygon, step) {
     }
   }
 }
+
+/**
+ * Cut a polygon at the antimeridian.
+ *
+ * Countries that straddle 180° (Russia, Fiji, the US with the Aleutians) are
+ * carved in an unwrapped 0..360 longitude space. Mapping that straight back to
+ * -180..180 leaves a ring with vertices at both +179 and -179 that are meant to
+ * be neighbours — which draws as a band right across the world. Splitting the
+ * shape at 180° first gives two well-formed pieces instead.
+ *
+ * @param {Array} multiPolygon in unwrapped space (longitudes may exceed 180)
+ * @param {Function} intersect polygon-clipping's intersection
+ */
+export function splitAtAntimeridian(multiPolygon, intersect) {
+  const box = (west, east) => [
+    [
+      [west, -90.5],
+      [east, -90.5],
+      [east, 90.5],
+      [west, 90.5],
+      [west, -90.5],
+    ],
+  ];
+
+  let left = [];
+  let right = [];
+  try {
+    left = intersect(multiPolygon, box(-360, 180)) ?? [];
+    right = intersect(multiPolygon, box(180, 720)) ?? [];
+  } catch {
+    return multiPolygon; // degenerate ring: leave it as it was
+  }
+
+  const shifted = right.map((polygon) =>
+    polygon.map((ring) => ring.map(([lon, lat]) => [lon - 360, lat])),
+  );
+  const result = [...left, ...shifted];
+  return result.length ? result : multiPolygon;
+}
+
+/** Shoelace signed area of a ring in lon/lat. Positive means counter-clockwise. */
+function signedArea(ring) {
+  let total = 0;
+  for (let i = 0; i < ring.length - 1; i += 1) {
+    const [x0, y0] = ring[i];
+    const [x1, y1] = ring[i + 1];
+    total += x0 * y1 - x1 * y0;
+  }
+  return total / 2;
+}
+
+/**
+ * Force the ring winding a spherical renderer expects: exterior rings
+ * clockwise, holes counter-clockwise.
+ *
+ * This is the opposite of RFC 7946, and it is not cosmetic. d3-geo reads a ring
+ * as "the interior is to the right", so a counter-clockwise exterior ring means
+ * *the whole globe except this patch* — one mis-wound province paints over the
+ * entire map. polygon-clipping makes no promise about orientation, so every ring
+ * is normalised here before it is written out. Verified empirically: a 10°x10°
+ * box wound clockwise measures 0.029 steradians, wound counter-clockwise 12.54.
+ */
+export function rewind(multiPolygon) {
+  return multiPolygon.map((polygon) =>
+    polygon.map((ring, index) => {
+      const wantClockwise = index === 0;
+      const isClockwise = signedArea(ring) < 0;
+      return isClockwise === wantClockwise ? ring : [...ring].reverse();
+    }),
+  );
+}
