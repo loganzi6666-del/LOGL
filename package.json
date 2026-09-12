@@ -10,7 +10,7 @@
     "build": "npm run build:world && npm run build:client",
     "dev": "node scripts/build-client.mjs --watch & node --watch src/server.js",
     "start": "node src/server.js",
-    "test": "node --test test/"
+    "test": "node --test test/**/*.test.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",
