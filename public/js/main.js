@@ -505,6 +505,7 @@ function wireShell() {
 // ── Boot ────────────────────────────────────────────────────────────────────
 
 // Exposed for debugging and for the smoke test's assertions.
+app.applyState = applyState;
 window.__logl = app;
 
 initTheme();

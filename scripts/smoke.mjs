@@ -104,6 +104,105 @@ await step('phone width', async () => {
 });
 await page.screenshot({ path: path.join(outDir, '6-narrow.png'), fullPage: false });
 
+await step('fight a war and see the map change', async () => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.waitForTimeout(500);
+
+  // Drive the turn loop through the API, then check that the browser actually
+  // paints the result. This is the whole premise of the game: territory taken in
+  // a war shows up on the map.
+  const outcome = await page.evaluate(async () => {
+    const post = async (url, body) => {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) throw new Error(`${url} -> ${response.status}`);
+      return response.json();
+    };
+
+    const app = window.__logl;
+    const me = app.state.meta.playerNation;
+    const enemy = app.state.player.neighbours?.[0] ?? 'KP';
+
+    let result = await post('/api/turn', {
+      orders: [{ type: 'DECLARE_WAR', target: enemy, casusBelli: 'smoke test' }],
+    });
+
+    const held = (state, owner) =>
+      Object.entries(state.provinces).filter(([, p]) => p.c === owner).map(([id]) => id);
+
+    let captured = null;
+    for (let turn = 0; turn < 45 && !captured; turn += 1) {
+      const state = result.state;
+      const orders = [];
+
+      // Concentrate everything on one border province, then push.
+      const staging = state.player.capitalProvince;
+      for (const army of state.armies) {
+        if (army.owner !== me || army.province === staging) continue;
+        const hop = (app.geometry.byId.get(army.province)?.neighbours ?? []).find(
+          (id) => state.provinces[id]?.c === me,
+        );
+        if (hop) orders.push({ type: 'MOVE', from: army.province, to: hop, commit: army.strength });
+      }
+
+      const massed = state.armies
+        .filter((a) => a.owner === me && a.province === staging)
+        .reduce((sum, a) => sum + a.strength, 0);
+      const target = (app.geometry.byId.get(staging)?.neighbours ?? []).find(
+        (id) => state.provinces[id]?.c === enemy,
+      );
+      if (target && massed > 22) {
+        orders.push({ type: 'OFFENSIVE', from: staging, to: target, commit: massed });
+      } else {
+        orders.push({ type: 'RECRUIT', divisions: 2 });
+      }
+
+      result = await post('/api/turn', { orders });
+      const mine = held(result.state, me);
+      captured = mine.find((id) => result.state.provinces[id].o === enemy) ?? null;
+    }
+
+    if (captured) {
+      // Push the new state through the app's own update path, so the panels and
+      // the map agree — the same thing that happens when a turn ends normally.
+      app.applyState(result.state);
+      app.map.highlightChanges(result.report?.mapChanges ?? []);
+      app.map.zoomTo(captured, 14);
+    }
+    return { enemy, captured, turn: result.state.meta.turn };
+  });
+
+  if (!outcome.captured) throw new Error('no territory was taken in 45 turns');
+  await page.waitForTimeout(1600);
+
+  // The occupied province must be drawn with the occupier's hatch, which means
+  // its pixels carry more than one colour.
+  const painted = await page.evaluate((provinceId) => {
+    const m = window.__logl.map;
+    const province = m.byId.get(provinceId);
+    const [[x0, y0], [x1, y1]] = province.bounds;
+    const a = m.transform.apply([x0, y0]);
+    const b = m.transform.apply([x1, y1]);
+    const left = Math.max(0, Math.round(Math.min(a[0], b[0]) * m.dpr));
+    const top = Math.max(0, Math.round(Math.min(a[1], b[1]) * m.dpr));
+    const width = Math.min(m.canvas.width - left, Math.round(Math.abs(b[0] - a[0]) * m.dpr)) || 1;
+    const height = Math.min(m.canvas.height - top, Math.round(Math.abs(b[1] - a[1]) * m.dpr)) || 1;
+    const { data } = m.ctx.getImageData(left, top, width, height);
+    const seen = new Set();
+    for (let i = 0; i < data.length; i += 4) seen.add(`${data[i]},${data[i + 1]},${data[i + 2]}`);
+    return { colours: seen.size, provinceId };
+  }, outcome.captured);
+
+  if (painted.colours < 3) {
+    throw new Error(`occupied province ${painted.provinceId} drew in ${painted.colours} colour(s)`);
+  }
+  console.log(`[${outcome.enemy} ${outcome.captured} 점령, ${outcome.turn}턴]`);
+});
+await page.screenshot({ path: path.join(outDir, '7-conquest.png') });
+
 await browser.close();
 
 console.log(`\n스크린샷: ${outDir}`);

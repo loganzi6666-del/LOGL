@@ -435,4 +435,6 @@ input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 
   .panel.right { border-left: 0; border-top: 1px solid var(--border); }
   .stat-grid { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
   .topbar { flex-wrap: wrap; }
+  /* The command bar is taller when stacked, so the toast has to clear it. */
+  .toast { bottom: 132px; }
 }

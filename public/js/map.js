@@ -116,6 +116,15 @@ export class WorldMap {
     const height = parent.clientHeight || 600;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
 
+    // Remember where on earth the viewer is looking. Refitting the projection to
+    // a new canvas size moves every projected coordinate, so a transform kept as
+    // it stands would leave them staring at empty ocean — which is exactly what
+    // happens when a window is resized or a phone is rotated.
+    const looking =
+      this.width && this.transform.k !== 1
+        ? this.projection.invert(this.transform.invert([this.width / 2, this.height / 2]))
+        : null;
+
     this.width = width;
     this.height = height;
     this.dpr = dpr;
@@ -133,6 +142,18 @@ export class WorldMap {
       { type: 'Sphere' },
     );
     this.rebuildPaths();
+
+    if (looking && Number.isFinite(looking[0])) {
+      const [x, y] = this.projection(looking);
+      const restored = zoomIdentity
+        .translate(width / 2, height / 2)
+        .scale(this.transform.k)
+        .translate(-x, -y);
+      // Push it through d3-zoom so its internal state matches what is drawn.
+      select(this.canvas).call(this.zoom.transform, restored);
+      this.transform = restored;
+    }
+
     this.render();
   }
 

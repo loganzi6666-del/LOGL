@@ -25,9 +25,13 @@ export function getProvider() {
   return provider;
 }
 
-/** Reset between tests, or after changing configuration at runtime. */
-export function resetProvider() {
-  provider = null;
+/**
+ * Replace the active provider, or clear it so the next call rebuilds from
+ * configuration. Passing one in is the seam the tests use to exercise the whole
+ * pipeline — arbiter, nation agents, narrator — without a network call.
+ */
+export function setProvider(next = null) {
+  provider = next;
 }
 
 /**
